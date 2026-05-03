@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+twilio
+
+elevenlabs
+httpx
+websockets
+requests
+python-dotenv
+python-multipart
+audioop

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auris</title>
+    <script src="https://cdn.jsdelivr.net/npm/@twilio/voice-sdk@2.10.0/dist/twilio.min.js"></script>
+    <style>
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body { background:#0a0e1a; color:#e2e8f0; font-family:'Segoe UI',sans-serif; min-height:100vh; display:flex; align-items:center; justify-content:center; }
+        .card { background:#111827; border:1px solid #1e2d40; border-radius:24px; padding:48px 40px; width:360px; text-align:center; box-shadow:0 0 60px rgba(79,110,247,0.1); }
+        .logo { width:72px; height:72px; background:linear-gradient(135deg,#4f6ef7,#00d4ff); border-radius:20px; display:flex; align-items:center; justify-content:center; font-size:32px; margin:0 auto 20px; box-shadow:0 0 30px rgba(79,110,247,0.4); }
+        h1 { font-size:24px; font-weight:700; margin-bottom:6px; }
+        .subtitle { color:#64748b; font-size:14px; margin-bottom:36px; }
+        .status { background:#0a0e1a; border:1px solid #1e2d40; border-radius:12px; padding:12px 20px; font-size:14px; color:#64748b; margin-bottom:28px; min-height:46px; display:flex; align-items:center; justify-content:center; gap:8px; transition:all 0.3s; }
+        .status.connected { border-color:rgba(0,200,150,0.4); color:#00c896; }
+        .status.calling   { border-color:rgba(79,110,247,0.4); color:#4f6ef7; }
+        .status.ringing   { border-color:rgba(245,158,11,0.4); color:#f59e0b; }
+        .status.error     { border-color:rgba(239,68,68,0.4); color:#ef4444; }
+        .dot { width:8px; height:8px; border-radius:50%; background:currentColor; flex-shrink:0; }
+        .dot.pulse { animation:pulse 1.5s infinite; }
+        @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 currentColor;opacity:1} 50%{box-shadow:0 0 0 6px transparent;opacity:0.7} }
+        .btn-group { display:flex; gap:12px; justify-content:center; }
+        .btn { padding:14px 28px; border-radius:14px; border:none; font-size:16px; font-weight:700; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:8px; font-family:inherit; }
+        .btn:disabled { opacity:0.4; cursor:not-allowed; }
+        .btn-call { background:linear-gradient(135deg,#4f6ef7,#3d5ae0); color:#fff; width:100%; justify-content:center; box-shadow:0 4px 20px rgba(79,110,247,0.4); }
+        .btn-call:hover:not(:disabled) { transform:translateY(-2px); }
+        .btn-answer { background:linear-gradient(135deg,#00c896,#00a87a); color:#fff; flex:1; justify-content:center; }
+        .btn-cancel { background:linear-gradient(135deg,#ef4444,#dc2626); color:#fff; flex:1; justify-content:center; }
+        .waveform { display:none; align-items:center; justify-content:center; gap:4px; height:40px; margin-bottom:20px; }
+        .waveform.visible { display:flex; }
+        .waveform span { display:block; width:4px; border-radius:2px; background:linear-gradient(180deg,#4f6ef7,#00d4ff); animation:wave 1.2s ease-in-out infinite; }
+        .waveform span:nth-child(1){height:10px;animation-delay:0s} .waveform span:nth-child(2){height:20px;animation-delay:0.1s} .waveform span:nth-child(3){height:32px;animation-delay:0.2s} .waveform span:nth-child(4){height:40px;animation-delay:0.3s} .waveform span:nth-child(5){height:32px;animation-delay:0.25s} .waveform span:nth-child(6){height:20px;animation-delay:0.15s} .waveform span:nth-child(7){height:10px;animation-delay:0.05s}
+        @keyframes wave { 0%,100%{transform:scaleY(0.3);opacity:0.5} 50%{transform:scaleY(1);opacity:1} }
+        .timer { font-family:'Courier New',monospace; font-size:32px; font-weight:700; color:#00d4ff; display:none; margin-bottom:20px; }
+        .timer.visible { display:block; }
+        @keyframes ring { 0%,100%{transform:rotate(0)} 25%{transform:rotate(-15deg)} 75%{transform:rotate(15deg)} }
+        .ringing .logo { animation:ring 0.5s ease-in-out infinite; }
+    </style>
+</head>
+<body>
+<div class="card" id="card">
+    <div class="logo">🤖</div>
+    <h1>Auris</h1>
+    <p class="subtitle">AI Voice Agent</p>
+    <div class="status" id="status"><div class="dot"></div><span>اضغط الزر للبدء</span></div>
+    <div class="waveform" id="waveform">
+        <span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span>
+    </div>
+    <div class="timer" id="timer">0:00</div>
+    <div class="btn-group" id="btnGroup">
+        <button class="btn btn-call" onclick="startCall()">📞 اتصل مع Auris</button>
+    </div>
+</div>
+<script>
+    let device, activeCall, timerInterval, seconds = 0;
+
+    function setStatus(text, type='') {
+        const el = document.getElementById('status');
+        el.className = 'status ' + type;
+        const dot = (type && type !== 'error') ? '<div class="dot pulse"></div>' : '<div class="dot"></div>';
+        el.innerHTML = dot + `<span>${text}</span>`;
+    }
+
+    function showButtons(html) { document.getElementById('btnGroup').innerHTML = html; }
+
+    function startTimer() {
+        seconds = 0;
+        const el = document.getElementById('timer');
+        el.classList.add('visible');
+        timerInterval = setInterval(() => {
+            seconds++;
+            const m = Math.floor(seconds/60), s = seconds%60;
+            el.textContent = `${m}:${s.toString().padStart(2,'0')}`;
+        }, 1000);
+    }
+
+    function stopTimer() {
+        clearInterval(timerInterval);
+        document.getElementById('timer').classList.remove('visible');
+    }
+
+    async function startCall() {
+        setStatus('جاري الاتصال...', 'calling');
+        showButtons('<button class="btn btn-call" disabled>📞 جاري الاتصال...</button>');
+        try {
+            const res  = await fetch('/token');
+            const data = await res.json();
+            device = new Twilio.Device(data.token, {logLevel:1});
+            device.on('incoming', call => {
+                activeCall = call;
+                document.getElementById('card').classList.add('ringing');
+                setStatus('📳 مكالمة واردة من Auris...', 'ringing');
+                showButtons(`
+                    <button class="btn btn-answer" onclick="answerCall()">✅ رد</button>
+                    <button class="btn btn-cancel" onclick="cancelCall()">📵 رفض</button>
+                `);
+                call.on('disconnect', onDisconnect);
+            });
+            device.on('error', err => {
+                setStatus('❌ ' + err.message, 'error');
+                showButtons('<button class="btn btn-call" onclick="startCall()">📞 اتصل مع Auris</button>');
+            });
+            await device.register();
+            await fetch('/make-call');
+            setStatus('⏳ انتظر مكالمة Auris...', 'calling');
+        } catch(err) {
+            setStatus('❌ ' + err.message, 'error');
+            showButtons('<button class="btn btn-call" onclick="startCall()">📞 اتصل مع Auris</button>');
+        }
+    }
+
+    function answerCall() {
+        if (!activeCall) return;
+        activeCall.accept();
+        document.getElementById('card').classList.remove('ringing');
+        setStatus('🟢 متصل مع Auris — تكلم!', 'connected');
+        document.getElementById('waveform').classList.add('visible');
+        showButtons('<button class="btn btn-cancel" style="width:100%;justify-content:center" onclick="hangup()">📵 إنهاء المكالمة</button>');
+        startTimer();
+    }
+
+    function cancelCall() {
+        if (activeCall) { activeCall.reject(); activeCall = null; }
+        onDisconnect();
+    }
+
+    function hangup() {
+        if (activeCall) { activeCall.disconnect(); activeCall = null; }
+        onDisconnect();
+    }
+
+    function onDisconnect() {
+        document.getElementById('card').classList.remove('ringing');
+        document.getElementById('waveform').classList.remove('visible');
+        stopTimer();
+        setStatus('📵 انتهت المكالمة', '');
+        showButtons('<button class="btn btn-call" onclick="startCall()">📞 اتصل مع Auris</button>');
+        activeCall = null;
+    }
+</script>
+</body>
+</html>

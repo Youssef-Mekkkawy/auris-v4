@@ -3,468 +3,996 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Auris</title>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Tajawal:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<title>Auris — أوريس</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Tajawal:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/@twilio/voice-sdk@2.10.0/dist/twilio.min.js"></script>
 
 <style>
-/* ─────────────────────────────────────────────────────────────
-   AURIS · Single-card voice bot — Glow / Glass
-   • RTL Arabic-first, responsive, centered
-   • Mic-reactive orb during the live call
-   • Preserves: device, activeCall, timerInterval, seconds,
-                setStatus, showButtons, startTimer, stopTimer,
-                startCall, answerCall, cancelCall, hangup, onDisconnect
-   ───────────────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════
+   AURIS · GLOW / GLASS EDITION — with Live Transcription
+   RTL Arabic-first, glassmorphism, breathing orb, dual-wave viz
+════════════════════════════════════════════════════════════════ */
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
 
 :root {
-  --bg: #04040e;
-  --surface: rgba(13,13,26,.55);
-  --line: rgba(255,255,255,.06);
-  --text: #e2e8f0;
-  --muted: #6a6a8a;
-  --accent: #7c72ff;
-  --accent-2: #00d4ff;
-  --good: #28c840;
-  --warn: #febc2e;
-  --bad: #ff5f57;
+  --bg:       #04040e;
+  --surface:  rgba(15,15,28,.65);
+  --surface2: rgba(255,255,255,.03);
+  --line:     rgba(255,255,255,.07);
+  --line2:    rgba(124,114,255,.2);
+  --text:     #e2e8f0;
+  --muted:    #5a5a7a;
+  --accent:   #7c72ff;
+  --accent2:  #00d4ff;
+  --good:     #28c840;
+  --warn:     #febc2e;
+  --bad:      #ff5f57;
+  --bot-bg:   rgba(124,114,255,.12);
+  --usr-bg:   rgba(0,212,255,.08);
 }
 
 html, body {
-  width: 100%; min-height: 100vh; overflow: hidden;
-  background: var(--bg); color: var(--text);
-  font-family: 'Cairo', 'Tajawal', sans-serif;
-  -webkit-font-smoothing: antialiased;
+  width:100%; min-height:100vh;
+  background:var(--bg); color:var(--text);
+  font-family:'Cairo','Tajawal',sans-serif;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
 }
 
-/* Stage */
+/* ── STAGE ── */
 .stage {
-  width: 100%; min-height: 100vh;
-  display: flex; align-items: center; justify-content: center;
-  position: relative; overflow: hidden;
-  padding: clamp(16px, 4vw, 32px);
-  background: radial-gradient(ellipse at 50% 0%, #0a0a18 0%, #04040e 60%, #02020a 100%);
+  min-height:100vh;
+  display:flex; align-items:flex-start; justify-content:center;
+  padding:clamp(16px,3vw,28px);
+  background:radial-gradient(ellipse at 50% -10%, #0c0c1e 0%, #04040e 55%, #02020a 100%);
+  position:relative; overflow:hidden;
+}
+
+/* ambient glow orbs */
+.stage::before, .stage::after {
+  content:''; position:fixed; border-radius:50%; pointer-events:none;
+  filter:blur(80px); z-index:0;
 }
 .stage::before {
-  content: ''; position: absolute; inset: 0; pointer-events: none;
-  background:
-    radial-gradient(circle at 15% 20%, rgba(124,114,255,.18), transparent 45%),
-    radial-gradient(circle at 85% 85%, rgba(0,212,255,.12), transparent 45%);
-  filter: blur(40px);
-  animation: drift 18s ease-in-out infinite;
+  width:600px; height:600px; top:-100px; left:-100px;
+  background:radial-gradient(circle, rgba(124,114,255,.14), transparent 70%);
+  animation:ambientDrift1 20s ease-in-out infinite;
 }
-@keyframes drift {
-  0%,100% { transform: translate(0,0) scale(1); }
-  50%     { transform: translate(20px,-30px) scale(1.1); }
+.stage::after {
+  width:500px; height:500px; bottom:-80px; right:-80px;
+  background:radial-gradient(circle, rgba(0,212,255,.1), transparent 70%);
+  animation:ambientDrift2 25s ease-in-out infinite;
 }
 
-/* Card */
+@keyframes ambientDrift1 {
+  0%,100% { transform:translate(0,0) scale(1); }
+  50% { transform:translate(40px,-60px) scale(1.15); }
+}
+@keyframes ambientDrift2 {
+  0%,100% { transform:translate(0,0) scale(1); }
+  50% { transform:translate(-30px,50px) scale(1.1); }
+}
+
+/* ── LAYOUT ── */
+.layout {
+  position:relative; z-index:1;
+  width:100%; max-width:900px;
+  display:grid;
+  grid-template-columns:340px 1fr;
+  gap:16px;
+  padding-top:8px;
+}
+
+/* ── CARD (left panel) ── */
 .card {
-  position: relative; z-index: 1;
-  width: 100%; max-width: 400px;
-  display: flex; flex-direction: column;
-  align-items: stretch;
-  padding: clamp(28px, 6vw, 40px) clamp(24px, 5vw, 36px) clamp(28px, 5vw, 36px);
-  gap: clamp(18px, 3vw, 22px);
-  border-radius: 24px;
-  border: 1px solid var(--line);
-  background:
-    linear-gradient(180deg, rgba(17,17,30,.85), rgba(13,13,26,.7)),
-    radial-gradient(circle at 50% 0%, rgba(124,114,255,.15), transparent 60%);
-  backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  display:flex; flex-direction:column; align-items:stretch;
+  gap:16px;
+  padding:28px 22px;
+  border-radius:22px;
+  border:1px solid var(--line);
+  background:linear-gradient(170deg, rgba(17,17,32,.9) 0%, rgba(12,12,24,.85) 100%);
+  backdrop-filter:blur(28px); -webkit-backdrop-filter:blur(28px);
   box-shadow:
-    0 0 0 1px rgba(255,255,255,.02),
-    0 30px 80px -20px rgba(0,0,0,.7),
-    0 60px 120px -40px rgba(124,114,255,.25),
-    inset 0 1px 0 rgba(255,255,255,.04);
-  text-align: center;
+    0 0 0 1px rgba(255,255,255,.025),
+    0 24px 64px -16px rgba(0,0,0,.7),
+    0 0 80px -20px rgba(124,114,255,.2),
+    inset 0 1px 0 rgba(255,255,255,.05);
+  position:sticky; top:28px; height:fit-content;
 }
 
-/* Brand */
-.brand {
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px; color: var(--muted);
-  letter-spacing: 2.5px; text-transform: uppercase;
+/* ── TITLEBAR ── */
+.titlebar {
+  display:flex; align-items:center; justify-content:space-between;
+  padding-bottom:14px;
+  border-bottom:1px solid var(--line);
 }
-.brand-mark {
-  font-family: 'Cairo', sans-serif; font-weight: 800; font-size: 17px;
-  background: linear-gradient(135deg, #fff, #b5acff);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  letter-spacing: -.3px; text-transform: none;
+.tb-brand {
+  display:flex; align-items:center; gap:8px;
 }
-.brand-divider { width: 1px; height: 12px; background: var(--line); }
+.tb-logo {
+  width:32px; height:32px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border-radius:9px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:16px; box-shadow:0 0 16px rgba(124,114,255,.5);
+}
+.tb-name {
+  font-family:'JetBrains Mono',monospace;
+  font-size:13px; font-weight:700;
+  background:linear-gradient(135deg,#fff,#b5acff);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  letter-spacing:.5px;
+}
+.tb-sub {
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; color:var(--muted); letter-spacing:2px;
+  text-transform:uppercase;
+}
+.tb-ctrls { display:flex; gap:6px; }
+.ctrl {
+  width:11px; height:11px; border-radius:50%; cursor:pointer;
+  transition:opacity .2s;
+}
+.ctrl:hover { opacity:.7; }
+.ctrl.red    { background:#ff5f57; }
+.ctrl.yellow { background:#febc2e; }
 
-/* Orb hero */
-.orb-wrap { display: flex; align-items: center; justify-content: center; padding: 6px 0 2px; }
-.orb {
-  --c1: #3a3a5a; --c2: #1a1a2e; --level: 0;
-  width: 150px; height: 150px;
-  position: relative;
-  display: flex; align-items: center; justify-content: center;
-  transition: filter .6s;
+/* ── ORB HERO ── */
+.orb-section {
+  display:flex; flex-direction:column; align-items:center;
+  gap:12px; padding:8px 0 4px;
 }
-.orb.idle      { --c1: #3a3a5a; --c2: #1a1a2e; }
-.orb.calling   { --c1: #7c72ff; --c2: #00d4ff; }
-.orb.ringing   { --c1: #febc2e; --c2: #7c4a0e; }
-.orb.connected { --c1: #28c840; --c2: #0e6018; }
-.orb.error     { --c1: #ff5f57; --c2: #3a1010; }
-.orb-core {
-  position: absolute; inset: 30%;
-  background: radial-gradient(circle, var(--c1), var(--c2));
-  border-radius: 50%; filter: blur(2px);
-  box-shadow: 0 0 60px var(--c1), inset 0 0 30px rgba(255,255,255,.2);
-  transform: scale(calc(1 + var(--level) * 0.45));
-  transition: transform .12s ease-out;
+
+.orb-wrap {
+  position:relative;
+  width:160px; height:160px;
+  display:flex; align-items:center; justify-content:center;
 }
+
+/* outer decorative rings */
 .orb-ring {
-  position: absolute; inset: 0;
-  border: 1px solid var(--c1);
-  border-radius: 50%; opacity: 0;
+  position:absolute; border-radius:50%;
+  border:1px solid var(--accent);
+  opacity:0; pointer-events:none;
 }
-.orb.calling .orb-ring,
-.orb.ringing .orb-ring,
-.orb.connected .orb-ring { animation: orbExpand 3s ease-out infinite; opacity: 1; }
-.orb.calling .orb-ring.r2,
-.orb.ringing .orb-ring.r2,
-.orb.connected .orb-ring.r2 { animation-delay: 1s; }
-.orb.calling .orb-ring.r3,
-.orb.ringing .orb-ring.r3,
-.orb.connected .orb-ring.r3 { animation-delay: 2s; }
-.orb.calling .orb-core,
-.orb.ringing .orb-core { animation: orbBreathe 2.4s ease-in-out infinite; }
-@keyframes orbExpand {
-  0%   { transform: scale(.55); opacity: .8; }
-  100% { transform: scale(1.55); opacity: 0; }
+.orb-ring.r1 { inset:-4px; }
+.orb-ring.r2 { inset:-18px; }
+.orb-ring.r3 { inset:-36px; }
+
+[data-state="ringing"]   .orb-ring,
+[data-state="connected"] .orb-ring { opacity:1; }
+
+[data-state="ringing"]   .orb-ring.r1 { animation:ringExp 2.4s ease-out infinite 0s; }
+[data-state="ringing"]   .orb-ring.r2 { animation:ringExp 2.4s ease-out infinite .8s; }
+[data-state="ringing"]   .orb-ring.r3 { animation:ringExp 2.4s ease-out infinite 1.6s; }
+[data-state="connected"] .orb-ring.r1 { animation:ringExp 3s ease-out infinite 0s; border-color:var(--good); }
+[data-state="connected"] .orb-ring.r2 { animation:ringExp 3s ease-out infinite 1s; border-color:var(--good); }
+[data-state="connected"] .orb-ring.r3 { animation:ringExp 3s ease-out infinite 2s; border-color:var(--good); }
+
+@keyframes ringExp {
+  0%   { transform:scale(.6); opacity:.7; }
+  100% { transform:scale(1.5); opacity:0; }
 }
+
+/* core orb */
+.orb-core {
+  width:120px; height:120px; border-radius:50%;
+  position:relative;
+  display:flex; align-items:center; justify-content:center;
+  background:radial-gradient(circle at 38% 32%,
+    rgba(124,114,255,.35) 0%,
+    rgba(13,13,30,.9) 70%);
+  box-shadow:
+    0 0 0 1px rgba(124,114,255,.2),
+    0 0 40px rgba(124,114,255,.15),
+    inset 0 1px 0 rgba(255,255,255,.06);
+  transition:all .5s cubic-bezier(.4,0,.2,1);
+}
+
+[data-state="idle"]      .orb-core { --oc1:rgba(124,114,255,.3); }
+[data-state="calling"]   .orb-core { --oc1:rgba(124,114,255,.55);
+  box-shadow:0 0 0 1px rgba(124,114,255,.3),0 0 60px rgba(124,114,255,.35),inset 0 1px 0 rgba(255,255,255,.08);
+  animation:orbBreathe 2.6s ease-in-out infinite; }
+[data-state="ringing"]   .orb-core { --oc1:rgba(254,188,46,.5);
+  background:radial-gradient(circle at 38% 32%,rgba(254,188,46,.4),rgba(13,13,30,.9) 70%);
+  box-shadow:0 0 0 1px rgba(254,188,46,.3),0 0 60px rgba(254,188,46,.25),inset 0 1px 0 rgba(255,255,255,.06);
+  animation:orbBreathe 1.8s ease-in-out infinite; }
+[data-state="connected"] .orb-core { --oc1:rgba(40,200,64,.45);
+  background:radial-gradient(circle at 38% 32%,rgba(40,200,64,.4),rgba(13,13,30,.9) 70%);
+  box-shadow:0 0 0 1px rgba(40,200,64,.3),0 0 60px rgba(40,200,64,.25),inset 0 1px 0 rgba(255,255,255,.06); }
+[data-state="ended"]     .orb-core { --oc1:rgba(255,95,87,.3);
+  background:radial-gradient(circle at 38% 32%,rgba(255,95,87,.3),rgba(13,13,30,.9) 70%);
+  box-shadow:0 0 0 1px rgba(255,95,87,.2),0 0 40px rgba(255,95,87,.15),inset 0 1px 0 rgba(255,255,255,.04); }
+
 @keyframes orbBreathe {
-  0%,100% { transform: scale(1);   filter: blur(2px); }
-  50%     { transform: scale(1.08); filter: blur(4px); }
+  0%,100% { transform:scale(1); }
+  50% { transform:scale(1.07); }
 }
+
+/* inner mic reactivity */
+.orb-level {
+  position:absolute; inset:18px; border-radius:50%;
+  background:radial-gradient(circle, var(--oc1,rgba(124,114,255,.3)), transparent 70%);
+  transform:scale(var(--mic,0));
+  transition:transform .08s ease-out;
+}
+
 .orb-glyph {
-  position: relative; z-index: 2;
-  font-size: 32px; color: #fff;
-  text-shadow: 0 0 20px rgba(255,255,255,.6);
+  position:relative; z-index:2;
+  font-size:32px;
+  text-shadow:0 0 24px rgba(255,255,255,.5);
+  user-select:none;
 }
 
-/* Title */
-.title-block { display: flex; flex-direction: column; gap: 6px; }
-.title {
-  font-family: 'Cairo', sans-serif; font-weight: 800;
-  font-size: 24px; color: #fff; letter-spacing: -.3px;
+/* orb status text */
+.orb-status {
+  text-align:center;
 }
-.subtitle {
-  font-family: 'Cairo', sans-serif; font-size: 13px;
-  color: var(--muted); line-height: 1.5;
+.orb-status-ar {
+  font-family:'Cairo',sans-serif; font-weight:700; font-size:16px; color:#fff;
+  margin-bottom:2px;
+}
+.orb-status-en {
+  font-family:'JetBrains Mono',monospace; font-size:10px;
+  color:var(--muted); letter-spacing:1.5px; text-transform:uppercase;
 }
 
-/* Status pill */
-.status {
-  display: flex; align-items: center; justify-content: center;
-  gap: 10px; padding: 12px 18px;
-  background: var(--surface); border: 1px solid var(--line);
-  border-radius: 14px;
-  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-  font-size: 14px; font-weight: 600;
-  color: var(--muted); min-height: 48px;
-  transition: all .3s;
+/* ── WAVEFORM ── */
+.wave-section {
+  height:52px; overflow:hidden; position:relative;
 }
-.status.calling   { border-color: rgba(124,114,255,.35); color: #b5acff;
-                    box-shadow: 0 0 24px -8px rgba(124,114,255,.4); }
-.status.ringing   { border-color: rgba(254,188,46,.35); color: var(--warn);
-                    box-shadow: 0 0 24px -8px rgba(254,188,46,.4); }
-.status.connected { border-color: rgba(40,200,64,.35); color: var(--good);
-                    box-shadow: 0 0 24px -8px rgba(40,200,64,.4); }
-.status.error     { border-color: rgba(255,95,87,.35); color: var(--bad);
-                    box-shadow: 0 0 24px -8px rgba(255,95,87,.3); }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-.dot.pulse { animation: dotPulse 1.5s infinite; }
+.wave-section svg { position:absolute; inset:0; width:100%; height:100%; }
+
+/* ── STATS PILL ── */
+.stats-pill {
+  display:flex; align-items:center; justify-content:space-around;
+  padding:10px 14px;
+  background:var(--surface2);
+  border:1px solid var(--line);
+  border-radius:14px;
+  gap:8px;
+}
+.stat { display:flex; flex-direction:column; align-items:center; gap:2px; }
+.stat-val {
+  font-family:'JetBrains Mono',monospace;
+  font-size:14px; font-weight:700; color:#fff;
+}
+.stat-val.sm { font-size:10px; letter-spacing:.3px; color:var(--accent); }
+.stat-key  { font-size:9px; color:var(--muted); letter-spacing:.5px; }
+.stat-div  { width:1px; height:28px; background:var(--line); flex-shrink:0; }
+
+/* ── STATUS PILL ── */
+.status-pill {
+  display:flex; align-items:center; justify-content:center;
+  gap:10px; padding:11px 16px;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:14px;
+  font-size:13px; font-weight:600; color:var(--muted);
+  min-height:46px; transition:all .3s;
+}
+.status-pill.calling   { border-color:rgba(124,114,255,.35); color:#b5acff;
+  box-shadow:0 0 20px -8px rgba(124,114,255,.4); }
+.status-pill.ringing   { border-color:rgba(254,188,46,.35); color:var(--warn);
+  box-shadow:0 0 20px -8px rgba(254,188,46,.4); }
+.status-pill.connected { border-color:rgba(40,200,64,.35); color:var(--good);
+  box-shadow:0 0 20px -8px rgba(40,200,64,.4); }
+.status-pill.error     { border-color:rgba(255,95,87,.35); color:var(--bad); }
+
+.status-dot {
+  width:8px; height:8px; border-radius:50%;
+  background:currentColor; flex-shrink:0;
+}
+.status-dot.pulse { animation:dotPulse 1.5s infinite; }
 @keyframes dotPulse {
-  0%,100% { opacity: 1; box-shadow: 0 0 0 0 currentColor; }
-  50%     { opacity: .5; box-shadow: 0 0 0 6px transparent; }
+  0%,100% { opacity:1; box-shadow:0 0 0 0 currentColor; }
+  50% { opacity:.5; box-shadow:0 0 0 5px transparent; }
 }
 
-/* Timer */
-.timer {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 32px; font-weight: 700;
-  color: var(--accent-2);
-  letter-spacing: 2px;
-  display: none;
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 24px rgba(0,212,255,.4);
-}
-.timer.visible { display: block; }
-
-/* Waveform (gradient bars) */
-.waveform {
-  display: none;
-  align-items: center; justify-content: center;
-  gap: 4px; height: 44px;
-}
-.waveform.visible { display: flex; }
-.waveform span {
-  display: block; width: 4px; border-radius: 2px;
-  background: linear-gradient(180deg, var(--accent), var(--accent-2));
-  animation: wave 1.2s ease-in-out infinite;
-  box-shadow: 0 0 8px rgba(124,114,255,.4);
-}
-.waveform span:nth-child(1){height:12px;animation-delay:0s}
-.waveform span:nth-child(2){height:22px;animation-delay:.1s}
-.waveform span:nth-child(3){height:36px;animation-delay:.2s}
-.waveform span:nth-child(4){height:44px;animation-delay:.3s}
-.waveform span:nth-child(5){height:36px;animation-delay:.25s}
-.waveform span:nth-child(6){height:22px;animation-delay:.15s}
-.waveform span:nth-child(7){height:12px;animation-delay:.05s}
-@keyframes wave {
-  0%,100% { transform: scaleY(.3); opacity: .5; }
-  50%     { transform: scaleY(1);  opacity: 1;  }
-}
-
-/* Buttons */
-.btn-group { display: flex; gap: 10px; }
+/* ── BUTTONS ── */
+.btn-row { display:flex; gap:10px; }
 .btn {
-  flex: 1; position: relative;
-  padding: 14px 18px;
-  border-radius: 14px; border: 1px solid transparent;
-  cursor: pointer;
-  font-family: 'Cairo', sans-serif; font-weight: 700; font-size: 15px;
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  transition: transform .15s, box-shadow .25s, opacity .2s;
-  color: #fff; overflow: hidden;
+  flex:1; position:relative;
+  padding:13px 18px; border-radius:14px;
+  border:1px solid transparent; cursor:pointer;
+  font-family:'Cairo',sans-serif; font-weight:700; font-size:14px;
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  transition:transform .15s, box-shadow .2s, opacity .2s;
+  color:#fff; overflow:hidden; white-space:nowrap;
 }
-.btn:hover:not(:disabled) { transform: translateY(-1px); }
-.btn:disabled { opacity: .5; cursor: not-allowed; }
-.btn-call {
-  background: linear-gradient(135deg, var(--accent), #5b4eff);
-  box-shadow: 0 8px 24px rgba(124,114,255,.4),
-              inset 0 1px 0 rgba(255,255,255,.2);
+.btn:hover:not(:disabled) { transform:translateY(-2px); }
+.btn:disabled { opacity:.4; cursor:not-allowed; }
+
+.btn-en {
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; letter-spacing:1.5px; opacity:.7;
+}
+
+.btn-primary {
+  background:linear-gradient(135deg,#7c72ff,#5b4eff);
+  box-shadow:0 8px 24px rgba(124,114,255,.4),inset 0 1px 0 rgba(255,255,255,.2);
 }
 .btn-answer {
-  background: linear-gradient(135deg, var(--good), #1aa830);
-  box-shadow: 0 8px 24px rgba(40,200,64,.4),
-              inset 0 1px 0 rgba(255,255,255,.2);
+  background:linear-gradient(135deg,var(--good),#1aa830);
+  box-shadow:0 8px 24px rgba(40,200,64,.35),inset 0 1px 0 rgba(255,255,255,.2);
 }
 .btn-cancel {
-  background: linear-gradient(135deg, var(--bad), #cc3a32);
-  box-shadow: 0 8px 24px rgba(255,95,87,.3),
-              inset 0 1px 0 rgba(255,255,255,.2);
+  background:linear-gradient(135deg,var(--bad),#cc3a32);
+  box-shadow:0 8px 24px rgba(255,95,87,.3),inset 0 1px 0 rgba(255,255,255,.2);
 }
-.btn-en {
-  font-family: 'JetBrains Mono', monospace; font-size: 10px;
-  letter-spacing: 1.5px; opacity: .8;
+.btn-ghost {
+  background:var(--surface2);
+  border-color:var(--line);
+  color:var(--muted);
 }
+.btn-ghost:hover:not(:disabled) { border-color:var(--line2); color:var(--text); }
+
+/* pulse ring on answer btn */
 .btn-ring {
-  position: absolute; inset: -4px;
-  border: 2px solid currentColor;
-  border-radius: 18px; pointer-events: none; opacity: 0;
+  position:absolute; inset:-4px;
+  border:2px solid rgba(40,200,64,.6);
+  border-radius:18px; pointer-events:none;
+  animation:btnRing 1.8s ease-out infinite;
 }
-.btn[data-pulse="true"] .btn-ring { opacity: 1; animation: btnRing 1.6s ease-out infinite; }
 @keyframes btnRing {
-  0%   { transform: scale(.85); opacity: .6; }
-  100% { transform: scale(1.15); opacity: 0; }
+  0%   { transform:scale(.88); opacity:.7; }
+  100% { transform:scale(1.12); opacity:0; }
 }
 
+/* ── HINT ── */
 .hint {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px; color: #2a2a3e;
-  letter-spacing: 1px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; color:#1e1e2e; letter-spacing:.8px;
+  text-align:center; line-height:1.7;
 }
-.hint span { color: var(--muted); }
+.hint span { color:var(--muted); }
+
+/* ═══════════════════════════════════════════════
+   RIGHT PANEL — TRANSCRIPTION
+═══════════════════════════════════════════════ */
+.transcript-panel {
+  display:flex; flex-direction:column; gap:0;
+  border-radius:22px;
+  border:1px solid var(--line);
+  background:linear-gradient(170deg, rgba(13,13,26,.9) 0%, rgba(10,10,20,.85) 100%);
+  backdrop-filter:blur(28px); -webkit-backdrop-filter:blur(28px);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.02),
+    0 24px 64px -16px rgba(0,0,0,.6),
+    inset 0 1px 0 rgba(255,255,255,.04);
+  overflow:hidden;
+  min-height:460px;
+}
+
+.tp-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:18px 22px 16px;
+  border-bottom:1px solid var(--line);
+  background:rgba(255,255,255,.015);
+}
+.tp-title-row { display:flex; align-items:center; gap:10px; }
+.tp-title {
+  font-family:'Cairo',sans-serif; font-weight:700; font-size:14px; color:#fff;
+}
+.tp-sub {
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; color:var(--muted); letter-spacing:1.5px; text-transform:uppercase;
+}
+.tp-live {
+  display:flex; align-items:center; gap:6px;
+  padding:4px 10px; border-radius:20px;
+  background:rgba(40,200,64,.12); border:1px solid rgba(40,200,64,.25);
+}
+.tp-live-dot {
+  width:6px; height:6px; border-radius:50%;
+  background:var(--good); flex-shrink:0;
+}
+.tp-live-dot.pulse { animation:dotPulse 1.5s infinite; }
+.tp-live-text {
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; color:var(--good); letter-spacing:1px; text-transform:uppercase;
+}
+.tp-live.offline {
+  background:rgba(90,90,122,.1); border-color:rgba(90,90,122,.2);
+}
+.tp-live.offline .tp-live-dot { background:var(--muted); animation:none; }
+.tp-live.offline .tp-live-text { color:var(--muted); }
+
+/* transcript body */
+.tp-body {
+  flex:1; overflow-y:auto; padding:18px 18px;
+  display:flex; flex-direction:column; gap:10px;
+  scroll-behavior:smooth;
+  min-height:360px; max-height:calc(100vh - 220px);
+}
+.tp-body::-webkit-scrollbar { width:4px; }
+.tp-body::-webkit-scrollbar-track { background:transparent; }
+.tp-body::-webkit-scrollbar-thumb { background:rgba(124,114,255,.3); border-radius:2px; }
+
+/* empty state */
+.tp-empty {
+  flex:1; display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  gap:12px; padding:40px;
+  text-align:center;
+}
+.tp-empty-icon { font-size:40px; opacity:.3; }
+.tp-empty-text {
+  font-family:'Cairo',sans-serif; font-size:14px;
+  color:var(--muted); line-height:1.7;
+}
+.tp-empty-sub {
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px; color:#2a2a3e; letter-spacing:1px;
+}
+
+/* eq bars inline */
+.eq-bars {
+  display:flex; align-items:center; gap:3px; height:14px;
+}
+.eq-bar {
+  width:3px; border-radius:2px;
+  background:var(--accent);
+  transition:height .08s;
+}
+
+/* messages */
+.msg {
+  display:flex; flex-direction:column; gap:4px;
+  animation:msgIn .3s cubic-bezier(.4,0,.2,1);
+  max-width:88%;
+}
+@keyframes msgIn {
+  from { opacity:0; transform:translateY(8px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+
+.msg.bot  { align-self:flex-end; align-items:flex-end; }
+.msg.user { align-self:flex-start; align-items:flex-start; }
+
+.msg-tag {
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; letter-spacing:.8px; text-transform:uppercase;
+  display:flex; align-items:center; gap:5px;
+}
+.msg.bot  .msg-tag { color:var(--accent); }
+.msg.user .msg-tag { color:var(--accent2); }
+
+.msg-bubble {
+  padding:10px 14px;
+  border-radius:16px;
+  font-family:'Cairo',sans-serif; font-size:13px; line-height:1.65;
+  color:var(--text);
+  border:1px solid;
+  position:relative;
+}
+.msg.bot  .msg-bubble {
+  background:var(--bot-bg);
+  border-color:rgba(124,114,255,.2);
+  border-bottom-left-radius:5px;
+}
+.msg.user .msg-bubble {
+  background:var(--usr-bg);
+  border-color:rgba(0,212,255,.15);
+  border-bottom-right-radius:5px;
+}
+
+/* typing indicator */
+.msg-typing .msg-bubble {
+  padding:10px 18px;
+}
+.typing-dots {
+  display:flex; gap:5px; align-items:center; height:16px;
+}
+.typing-dot {
+  width:6px; height:6px; border-radius:50%;
+  background:var(--accent); opacity:.6;
+  animation:typingBounce 1.2s ease-in-out infinite;
+}
+.typing-dot:nth-child(2) { animation-delay:.2s; }
+.typing-dot:nth-child(3) { animation-delay:.4s; }
+@keyframes typingBounce {
+  0%,80%,100% { transform:translateY(0); opacity:.4; }
+  40% { transform:translateY(-6px); opacity:1; }
+}
+
+/* tp footer */
+.tp-footer {
+  padding:14px 18px;
+  border-top:1px solid var(--line);
+  display:flex; align-items:center; justify-content:space-between;
+  background:rgba(255,255,255,.01);
+}
+.tp-footer-info {
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; color:var(--muted); letter-spacing:.8px;
+}
+.tp-footer-count {
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px; color:var(--accent);
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 720px) {
+  .layout {
+    grid-template-columns:1fr;
+    max-width:400px;
+    margin:0 auto;
+  }
+  .card { position:static; }
+  .transcript-panel { min-height:320px; }
+  .tp-body { max-height:300px; }
+}
+
+/* scrollbar global */
+::-webkit-scrollbar { width:5px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:rgba(124,114,255,.25); border-radius:3px; }
 </style>
 </head>
 <body>
 
 <div class="stage">
-  <div class="card" id="card">
+  <div class="layout" data-state="idle" id="layout">
 
-    <div class="brand">
-      <span class="brand-mark">أوريس</span>
-      <span class="brand-divider"></span>
-      <span>AI VOICE AGENT</span>
-    </div>
+    <!-- ══ LEFT: CALL CARD ══ -->
+    <div class="card">
 
-    <div class="orb-wrap">
-      <div class="orb idle" id="orb">
-        <div class="orb-core"></div>
-        <div class="orb-ring r1"></div>
-        <div class="orb-ring r2"></div>
-        <div class="orb-ring r3"></div>
-        <div class="orb-glyph" id="orbGlyph">🤖</div>
+      <!-- titlebar -->
+      <div class="titlebar">
+        <div class="tb-brand">
+          <div class="tb-logo">🤖</div>
+          <div>
+            <div class="tb-name">أوريس · AURIS</div>
+            <div class="tb-sub">AI VOICE BRIDGE</div>
+          </div>
+        </div>
+        <div class="tb-ctrls">
+          <div class="ctrl yellow"></div>
+          <div class="ctrl red" onclick="location.reload()"></div>
+        </div>
       </div>
-    </div>
 
-    <div class="title-block">
-      <div class="title">Auris</div>
-      <div class="subtitle">ذكاء اصطناعي يتكلّم بالمصري</div>
-    </div>
+      <!-- orb + status -->
+      <div class="orb-section">
+        <div class="orb-wrap" id="orbWrap">
+          <div class="orb-ring r1"></div>
+          <div class="orb-ring r2"></div>
+          <div class="orb-ring r3"></div>
+          <div class="orb-core">
+            <div class="orb-level" id="orbLevel"></div>
+            <div class="orb-glyph" id="orbGlyph">🎙</div>
+          </div>
+        </div>
+        <div class="orb-status">
+          <div class="orb-status-ar" id="statusAr">جاري التسجيل...</div>
+          <div class="orb-status-en" id="statusEn">INITIALIZING</div>
+        </div>
+      </div>
 
-    <div class="status" id="status">
-      <div class="dot"></div>
-      <span>اضغط الزر للبدء</span>
-    </div>
+      <!-- waveform -->
+      <div class="wave-section" id="waveSection">
+        <svg id="waveSvg" viewBox="0 0 340 52" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="wgA" x1="0" x2="1">
+              <stop offset="0" stop-color="#7c72ff" stop-opacity="0"/>
+              <stop offset=".5" stop-color="#7c72ff" stop-opacity=".9"/>
+              <stop offset="1" stop-color="#7c72ff" stop-opacity="0"/>
+            </linearGradient>
+            <linearGradient id="wgB" x1="0" x2="1">
+              <stop offset="0" stop-color="#00d4ff" stop-opacity="0"/>
+              <stop offset=".5" stop-color="#00d4ff" stop-opacity=".7"/>
+              <stop offset="1" stop-color="#00d4ff" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <path id="waveA" stroke="url(#wgA)" stroke-width="2" fill="none"/>
+          <path id="waveB" stroke="url(#wgB)" stroke-width="1.5" fill="none" opacity=".6"/>
+        </svg>
+      </div>
 
-    <div class="timer" id="timer">0:00</div>
+      <!-- stats -->
+      <div class="stats-pill">
+        <div class="stat">
+          <div class="stat-val" id="statDur">00:00</div>
+          <div class="stat-key">المدة</div>
+        </div>
+        <div class="stat-div"></div>
+        <div class="stat">
+          <div class="stat-val" id="statMsgs">0</div>
+          <div class="stat-key">رسائل</div>
+        </div>
+        <div class="stat-div"></div>
+        <div class="stat">
+          <div class="stat-val sm">ElevenLabs</div>
+          <div class="stat-key">الوكيل</div>
+        </div>
+      </div>
 
-    <div class="waveform" id="waveform">
-      <span></span><span></span><span></span><span></span>
-      <span></span><span></span><span></span>
-    </div>
+      <!-- status pill -->
+      <div class="status-pill" id="statusPill">
+        <div class="status-dot pulse" id="statusDot"></div>
+        <span id="statusText">جاري الاتصال بالخادم...</span>
+      </div>
 
-    <div class="btn-group" id="btnGroup">
-      <button class="btn btn-call" style="width:100%" onclick="startCall()">
-        <span>اتصل مع Auris</span>
-        <span class="btn-en">CALL ME</span>
-      </button>
-    </div>
+      <!-- buttons -->
+      <div class="btn-row" id="btnRow"></div>
 
-    <div class="hint">
-      اسمح بالميكروفون عند الطلب ·
-      <span>allow mic when prompted</span>
-    </div>
-  </div>
-</div>
+      <!-- hint -->
+      <div class="hint">
+        النص المباشر في اللوحة اليمين ·
+        <span>live transcript on the right</span>
+      </div>
+
+    </div><!-- /card -->
+
+    <!-- ══ RIGHT: TRANSCRIPT PANEL ══ -->
+    <div class="transcript-panel">
+
+      <div class="tp-header">
+        <div class="tp-title-row">
+          <div>
+            <div class="tp-title">النص المباشر</div>
+            <div class="tp-sub">Live Transcript · Egyptian Arabic</div>
+          </div>
+        </div>
+        <div class="tp-live offline" id="liveIndicator">
+          <div class="tp-live-dot" id="liveDot"></div>
+          <div class="tp-live-text" id="liveText">OFFLINE</div>
+        </div>
+      </div>
+
+      <div class="tp-body" id="transcriptBody">
+        <div class="tp-empty" id="emptyState">
+          <div class="tp-empty-icon">🎙</div>
+          <div class="tp-empty-text">
+            ابدأ المكالمة وهيظهر النص هنا<br/>أوتوماتيك بالعربي المصري
+          </div>
+          <div class="tp-empty-sub">TRANSCRIPT WILL APPEAR HERE · AR-EG</div>
+        </div>
+      </div>
+
+      <div class="tp-footer">
+        <div class="tp-footer-info">AR-EG · 16kHz · μ-law · ElevenLabs STT</div>
+        <div class="tp-footer-count" id="msgCount">0 رسائل</div>
+      </div>
+
+    </div><!-- /transcript-panel -->
+
+  </div><!-- /layout -->
+</div><!-- /stage -->
 
 <script>
-let device, activeCall, timerInterval, seconds = 0;
-let audioCtx, analyser, micStream, rafLevel;
+// ══════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════
+let device, activeCall;
+let audioCtx, analyser, micStream, rafLevel, rafWave;
+let callSeconds = 0, callTimer;
+let msgCount = 0;
+let wsTranscript = null;
+let waveActive = false, waveT = 0;
 
-// ── Status (drives orb visual + status pill) ───────────────
-function setStatus(text, type = '') {
-  const el  = document.getElementById('status');
-  const orb = document.getElementById('orb');
+const layout = document.getElementById('layout');
+
+// ── STATE MACHINE ──────────────────────────────────────────────
+function setState(state) {
+  layout.dataset.state = state;
   const glyph = document.getElementById('orbGlyph');
-
-  el.className = 'status ' + type;
-  const dot = (type && type !== 'error') ? '<div class="dot pulse"></div>' : '<div class="dot"></div>';
-  el.innerHTML = dot + '<span>' + text + '</span>';
-
-  orb.className = 'orb ' + (type || 'idle');
   glyph.textContent =
-    type === 'connected' ? '●' :
-    type === 'ringing'   ? '📞' :
-    type === 'error'     ? '✕' :
-    type === 'calling'   ? '🤖' : '🤖';
+    state === 'connected' ? '●'  :
+    state === 'ringing'   ? '📞' :
+    state === 'ended'     ? '✕'  : '🎙';
 }
 
-function showButtons(html) { document.getElementById('btnGroup').innerHTML = html; }
-
-// ── Timer ──────────────────────────────────────────────────
-function startTimer() {
-  seconds = 0;
-  const el = document.getElementById('timer');
-  el.classList.add('visible');
-  timerInterval = setInterval(() => {
-    seconds++;
-    const m = Math.floor(seconds / 60), s = seconds % 60;
-    el.textContent = m + ':' + s.toString().padStart(2,'0');
-  }, 1000);
-}
-function stopTimer() {
-  clearInterval(timerInterval);
-  document.getElementById('timer').classList.remove('visible');
+// ── STATUS ─────────────────────────────────────────────────────
+function setStatus(arText, enText, type) {
+  document.getElementById('statusAr').textContent   = arText;
+  document.getElementById('statusEn').textContent   = enText || type?.toUpperCase() || '';
+  const pill = document.getElementById('statusPill');
+  pill.className = 'status-pill ' + (type || '');
+  const dot = document.getElementById('statusDot');
+  dot.className  = 'status-dot ' + (type && type !== 'error' ? 'pulse' : '');
+  document.getElementById('statusText').textContent = arText;
+  setState(type === 'connected' ? 'connected' :
+           type === 'ringing'   ? 'ringing'   :
+           type === 'calling'   ? 'calling'   :
+           type === 'error'     ? 'ended'     : 'idle');
 }
 
-// ── Mic-reactive orb ───────────────────────────────────────
+function showButtons(html) {
+  document.getElementById('btnRow').innerHTML = html;
+}
+
+// ── WAVEFORM ───────────────────────────────────────────────────
+function wavePath(t, phase, amp, freq) {
+  const W = 340, MID = 26, pts = [];
+  for (let x = 0; x <= W; x += 5) {
+    const y = MID + Math.sin((x/W)*Math.PI*freq + phase) * amp
+                  + Math.sin((x/W)*Math.PI*(freq*2.1) + phase*1.6) * (amp*.3);
+    pts.push(x.toFixed(0)+','+y.toFixed(1));
+  }
+  return 'M'+pts.join(' L');
+}
+
+function startWave() {
+  waveActive = true; waveT = 0;
+  const pA = document.getElementById('waveA');
+  const pB = document.getElementById('waveB');
+  let last = performance.now();
+  const tick = (now) => {
+    waveT += (now - last) / 1000; last = now;
+    const amp = waveActive ? 14 : 1.5;
+    pA.setAttribute('d', wavePath(waveT*2.2, waveT*2.2, amp, 4));
+    pB.setAttribute('d', wavePath(waveT*-1.6+1, waveT*-1.6+1, amp*.65, 5));
+    rafWave = requestAnimationFrame(tick);
+  };
+  rafWave = requestAnimationFrame(tick);
+}
+
+function stopWave() {
+  waveActive = false;
+  // let it fade out then cancel
+  setTimeout(() => { cancelAnimationFrame(rafWave); }, 1000);
+}
+
+// ── MIC LEVEL → ORB ───────────────────────────────────────────
 async function startMicLevel() {
   if (audioCtx) return;
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    micStream = await navigator.mediaDevices.getUserMedia({ audio:true, video:false });
     audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
     const src = audioCtx.createMediaStreamSource(micStream);
     analyser  = audioCtx.createAnalyser();
-    analyser.fftSize = 256; analyser.smoothingTimeConstant = 0.7;
+    analyser.fftSize = 256; analyser.smoothingTimeConstant = .75;
     src.connect(analyser);
     const buf = new Uint8Array(analyser.frequencyBinCount);
-    const orb = document.getElementById('orb');
+    const lvl = document.getElementById('orbLevel');
     let smooth = 0;
     const tick = () => {
       analyser.getByteTimeDomainData(buf);
       let sum = 0;
-      for (let i = 0; i < buf.length; i++) {
-        const v = (buf[i] - 128) / 128; sum += v * v;
-      }
-      const rms = Math.sqrt(sum / buf.length);
-      const lvl = Math.min(1, rms * 3.5);
-      smooth = smooth * 0.7 + lvl * 0.3;
-      orb.style.setProperty('--level', smooth.toFixed(3));
+      for (let i=0;i<buf.length;i++) { const v=(buf[i]-128)/128; sum+=v*v; }
+      const rms = Math.sqrt(sum/buf.length);
+      smooth = smooth*.72 + Math.min(1,rms*4)*.28;
+      lvl.style.setProperty('--mic', smooth.toFixed(3));
+      lvl.style.transform = 'scale('+smooth.toFixed(3)+')';
       rafLevel = requestAnimationFrame(tick);
     };
     tick();
-  } catch (err) { console.warn('mic level unavailable:', err && err.message); }
+  } catch(e) { console.warn('mic level:', e.message); }
 }
+
 function stopMicLevel() {
   cancelAnimationFrame(rafLevel);
-  if (audioCtx)   { try { audioCtx.close(); } catch(_){} audioCtx = null; }
-  if (micStream)  { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
-  const orb = document.getElementById('orb');
-  if (orb) orb.style.setProperty('--level', '0');
+  if (audioCtx) { try { audioCtx.close(); } catch(_){} audioCtx=null; }
+  if (micStream) { micStream.getTracks().forEach(t=>t.stop()); micStream=null; }
+  const lvl = document.getElementById('orbLevel');
+  lvl.style.transform = 'scale(0)';
 }
 
-// ── Call flow (preserved verbatim) ─────────────────────────
-async function startCall() {
-  setStatus('جاري الاتصال...', 'calling');
-  showButtons(
-    '<button class="btn btn-call" style="width:100%" disabled>' +
-      '<span>جاري الاتصال...</span><span class="btn-en">CONNECTING</span>' +
-    '</button>'
-  );
-  try {
-    const res  = await fetch('/token');
-    const data = await res.json();
-    device = new Twilio.Device(data.token, { logLevel: 1 });
+// ── CALL TIMER ─────────────────────────────────────────────────
+function startTimer() {
+  callSeconds = 0;
+  callTimer = setInterval(() => {
+    callSeconds++;
+    const m = Math.floor(callSeconds/60), s = callSeconds%60;
+    document.getElementById('statDur').textContent =
+      String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+  }, 1000);
+}
+function stopTimer() { clearInterval(callTimer); }
 
-    device.on('incoming', call => {
-      activeCall = call;
-      document.getElementById('card').classList.add('ringing');
-      setStatus('📳 مكالمة واردة من Auris...', 'ringing');
-      showButtons(
-        '<button class="btn btn-answer" data-pulse="true" onclick="answerCall()">' +
-          '<span class="btn-ring"></span>' +
-          '<span>رد</span><span class="btn-en">ANSWER</span>' +
-        '</button>' +
-        '<button class="btn btn-cancel" onclick="cancelCall()">' +
-          '<span>رفض</span><span class="btn-en">REJECT</span>' +
-        '</button>'
-      );
-      call.on('disconnect', onDisconnect);
-    });
-    device.on('error', err => {
-      setStatus('❌ ' + err.message, 'error');
-      showButtons(
-        '<button class="btn btn-call" style="width:100%" onclick="startCall()">' +
-          '<span>اتصل مع Auris</span><span class="btn-en">CALL ME</span>' +
-        '</button>'
-      );
-    });
-    await device.register();
-    await fetch('/make-call');
-    setStatus('⏳ انتظر مكالمة Auris...', 'calling');
-  } catch (err) {
-    setStatus('❌ ' + err.message, 'error');
-    showButtons(
-      '<button class="btn btn-call" style="width:100%" onclick="startCall()">' +
-        '<span>اتصل مع Auris</span><span class="btn-en">CALL ME</span>' +
-      '</button>'
-    );
+// ══════════════════════════════════════════════════════════════
+// TRANSCRIPT
+// ══════════════════════════════════════════════════════════════
+let typingEl = null;
+
+function setLive(online) {
+  const ind  = document.getElementById('liveIndicator');
+  const dot  = document.getElementById('liveDot');
+  const txt  = document.getElementById('liveText');
+  ind.className = 'tp-live ' + (online ? '' : 'offline');
+  dot.className = 'tp-live-dot' + (online ? ' pulse' : '');
+  txt.textContent = online ? 'LIVE' : 'OFFLINE';
+}
+
+function appendMsg(who, text) {
+  const body = document.getElementById('transcriptBody');
+
+  // remove empty state on first message
+  const empty = document.getElementById('emptyState');
+  if (empty) empty.remove();
+
+  // remove typing indicator
+  if (typingEl) { typingEl.remove(); typingEl = null; }
+
+  const isBot = who === 'BOT';
+  const div = document.createElement('div');
+  div.className = 'msg ' + (isBot ? 'bot' : 'user');
+  div.innerHTML = `
+    <div class="msg-tag">
+      ${isBot ? '🤖 أوريس' : '🎤 أنت'}
+    </div>
+    <div class="msg-bubble">${escHtml(text)}</div>
+  `;
+  body.appendChild(div);
+  body.scrollTop = body.scrollHeight;
+
+  msgCount++;
+  document.getElementById('statMsgs').textContent = msgCount;
+  document.getElementById('msgCount').textContent = msgCount + ' رسائل';
+}
+
+function showTyping() {
+  if (typingEl) return;
+  const body = document.getElementById('transcriptBody');
+  const empty = document.getElementById('emptyState');
+  if (empty) empty.remove();
+  typingEl = document.createElement('div');
+  typingEl.className = 'msg bot msg-typing';
+  typingEl.innerHTML = `
+    <div class="msg-tag">🤖 أوريس</div>
+    <div class="msg-bubble">
+      <div class="typing-dots">
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+      </div>
+    </div>
+  `;
+  body.appendChild(typingEl);
+  body.scrollTop = body.scrollHeight;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+          .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
+// WebSocket transcript connection
+function connectTranscriptWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const url   = proto + '//' + location.host + '/ws/transcript';
+  try {
+    wsTranscript = new WebSocket(url);
+
+    wsTranscript.onopen = () => {
+      setLive(true);
+      console.log('📡 Transcript WS connected');
+    };
+
+    wsTranscript.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data);
+        if (data.type === 'user_transcript' && data.text) {
+          appendMsg('USER', data.text);
+        } else if (data.type === 'agent_response' && data.text) {
+          appendMsg('BOT', data.text);
+        } else if (data.type === 'agent_thinking') {
+          showTyping();
+        }
+      } catch(e) {
+        // plain text fallback
+        if (ev.data.startsWith('BOT:')) appendMsg('BOT', ev.data.slice(4).trim());
+        else if (ev.data.startsWith('USER:')) appendMsg('USER', ev.data.slice(5).trim());
+      }
+    };
+
+    wsTranscript.onclose = () => {
+      setLive(false);
+      console.log('📵 Transcript WS closed — will retry in 3s');
+      setTimeout(connectTranscriptWS, 3000);
+    };
+
+    wsTranscript.onerror = () => {
+      setLive(false);
+      wsTranscript.close();
+    };
+  } catch(e) {
+    console.warn('WS not available:', e.message);
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+// TWILIO SETUP
+// ══════════════════════════════════════════════════════════════
+window.addEventListener('load', async () => {
+  startWave();
+  connectTranscriptWS();
+
+  try {
+    const res  = await fetch('/token');
+    const data = await res.json();
+
+    device = new Twilio.Device(data.token, { logLevel:1 });
+
+    device.on('incoming', call => {
+      activeCall = call;
+      setStatus('📳 مكالمة واردة — ارد!', 'INCOMING', 'ringing');
+      showButtons(`
+        <button class="btn btn-answer" onclick="answerCall()">
+          <div class="btn-ring"></div>
+          <span>✅ رد</span>
+          <span class="btn-en">ANSWER</span>
+        </button>
+        <button class="btn btn-ghost" onclick="cancelCall()">
+          <span>رفض</span>
+          <span class="btn-en">REJECT</span>
+        </button>
+      `);
+      call.on('disconnect', onDisconnect);
+      call.on('cancel', onDisconnect);
+    });
+
+    device.on('error', err => {
+      setStatus('❌ ' + err.message, 'ERROR', 'error');
+      showButtons(`
+        <button class="btn btn-primary" onclick="location.reload()">
+          <span>إعادة المحاولة</span>
+          <span class="btn-en">RETRY</span>
+        </button>
+      `);
+    });
+
+    await device.register();
+    setStatus('جاهز — اضغط للاتصال', 'READY · PRESS TO CALL', 'calling');
+    showButtons(`
+      <button class="btn btn-primary" style="width:100%" onclick="callMe()">
+        <span class="btn-ring"></span>
+        <span>📞 اتصل بيا</span>
+        <span class="btn-en">CALL ME</span>
+      </button>
+    `);
+
+  } catch(e) {
+    setStatus('❌ ' + e.message, 'ERROR', 'error');
+    showButtons(`
+      <button class="btn btn-primary" onclick="location.reload()">
+        <span>إعادة المحاولة</span>
+        <span class="btn-en">RETRY</span>
+      </button>
+    `);
+  }
+});
+
+// ── CALL ACTIONS ───────────────────────────────────────────────
+async function callMe() {
+  setStatus('جاري الاتصال...', 'CALLING · WAIT', 'calling');
+  showButtons(`
+    <button class="btn btn-ghost" style="width:100%" disabled>
+      <span>⏳ انتظر...</span>
+      <span class="btn-en">WAITING FOR CALL</span>
+    </button>
+  `);
+  try {
+    const res = await fetch('/make-call');
+    const data = await res.json();
+    console.log('📞 Outbound call triggered:', data.call_sid);
+    setStatus('📳 رن — انتظر الرد...', 'RINGING · INCOMING SOON', 'ringing');
+  } catch(e) {
+    setStatus('❌ فشل الاتصال', 'CALL FAILED', 'error');
+    showButtons(`
+      <button class="btn btn-primary" style="width:100%" onclick="location.reload()">
+        <span>🔄 حاول تاني</span>
+        <span class="btn-en">RETRY</span>
+      </button>
+    `);
+  }
+}
 function answerCall() {
   if (!activeCall) return;
   activeCall.accept();
-  document.getElementById('card').classList.remove('ringing');
-  setStatus('🟢 متصل مع Auris — اتكلم!', 'connected');
-  document.getElementById('waveform').classList.add('visible');
-  showButtons(
-    '<button class="btn btn-cancel" style="width:100%" onclick="hangup()">' +
-      '<span>إنهاء المكالمة</span><span class="btn-en">HANG UP</span>' +
-    '</button>'
-  );
-  startTimer();
+  setStatus('🟢 متصل — اتكلم!', 'LIVE · CONNECTED', 'connected');
+  showButtons(`
+    <button class="btn btn-cancel" style="width:100%" onclick="hangup()">
+      <span>📵 إنهاء المكالمة</span>
+      <span class="btn-en">HANG UP</span>
+    </button>
+  `);
+  waveActive = true;
   startMicLevel();
+  startTimer();
 }
 
 function cancelCall() {
@@ -478,17 +1006,25 @@ function hangup() {
 }
 
 function onDisconnect() {
-  document.getElementById('card').classList.remove('ringing');
-  document.getElementById('waveform').classList.remove('visible');
-  stopTimer();
   stopMicLevel();
-  setStatus('📵 انتهت المكالمة', '');
-  showButtons(
-    '<button class="btn btn-call" style="width:100%" onclick="startCall()">' +
-      '<span>اتصل مع Auris</span><span class="btn-en">CALL ME</span>' +
-    '</button>'
-  );
+  stopWave();
+  stopTimer();
+  setStatus('📵 انتهت المكالمة', 'CALL ENDED', 'ended');
+  setState('ended');
+  showButtons(`
+    <button class="btn btn-primary" style="width:100%" onclick="location.reload()">
+      <span>🔄 اتصال جديد</span>
+      <span class="btn-en">NEW CALL</span>
+    </button>
+  `);
   activeCall = null;
+
+  // keep WS alive for last transcript messages
+  setTimeout(() => {
+    if (wsTranscript && wsTranscript.readyState === WebSocket.OPEN) {
+      wsTranscript.close();
+    }
+  }, 5000);
 }
 </script>
 </body>

@@ -44,6 +44,8 @@
 - [Project Structure](#-project-structure)
 - [Environment Variables](#️-environment-variables)
 - [Installation & Setup](#️-installation--setup)
+- [One-Command Startup](#-one-command-startup)
+- [ElevenLabs Agent Setup](#-elevenlabs-agent-setup)
 - [KPIs & Success Metrics](#-kpis--success-metrics)
 - [License](#-license)
 
@@ -139,8 +141,14 @@ auris-ai/
 │   ├── main.py                 # Application entry point & WebSocket handlers
 │   ├── ai_engine.py            # Whisper, Gemini, and TTS integration
 │   ├── twilio_utils.py         # Twilio TwiML and Stream management
+│   ├── run.py                  # 🚀 One-command launcher (tunnel + webhook + server)
 │   ├── requirements.txt        # Python dependencies
 │   └── .env                    # API keys & config (not committed)
+│
+├── scripts/
+│   └── agent_startup/          # 🤖 ElevenLabs Agent Setup (run once per new API key)
+│       ├── init_agent_overrides.py   # Step 1 — Unlocks agent customization overrides
+│       └── provision_agent.py        # Step 2 — Injects prompt, voice, language & first message
 │
 ├── dashboard/                  # 🖥️  Laravel Admin Panel
 │   ├── app/                    # Controllers & Models
@@ -166,6 +174,10 @@ TWILIO_AUTH_TOKEN=your_twilio_auth_token
 TWILIO_PHONE_NUMBER=+1234567890
 GEMINI_API_KEY=your_google_gemini_api_key
 PORT=8000
+
+# ElevenLabs AI Agent
+ELEVEN_API_KEY=your_elevenlabs_api_key
+ELEVENLABS_AGENT_ID=your_agent_id
 ```
 
 ### `dashboard/.env` — Laravel Admin Panel
@@ -233,14 +245,7 @@ uvicorn main:app --reload --port 8000
 
 ### Step 3 — Expose Localhost via Cloudflare Tunnel
 
-Twilio requires a **public HTTPS URL** to reach your local server. Use Cloudflare Tunnel:
-
-```bash
-cloudflared tunnel --url http://localhost:8000
-```
-
-> Copy the generated `https://xxxx.trycloudflare.com` URL.  
-> Paste it into: **Twilio Console → Phone Numbers → Active Number → Webhook URL**
+> ✅ **This step is automated by `run.py`** — see the [One-Command Startup](#-one-command-startup) section below. No manual configuration needed.
 
 ---
 
@@ -267,6 +272,107 @@ php artisan serve
 ```
 
 > Dashboard will be available at: **http://localhost:8000**
+
+---
+
+## 🚦 One-Command Startup
+
+Instead of manually managing the tunnel and webhook, `run.py` handles everything automatically in a single command:
+
+```bash
+cd backend
+python run.py
+```
+
+### What it does — in order
+
+```
+1. 🌐  Starts Cloudflare tunnel  →  exposes localhost:8000 to the internet
+2. 🔗  Captures the tunnel URL   →  saves it to .env as CLOUDFLARE_URL
+3. 📞  Updates Twilio webhook    →  sets both voice_url & voice_fallback_url automatically
+4. ⚡  Launches FastAPI server   →  uvicorn starts on port 8000
+```
+
+### Expected output
+
+```
+==================================================
+   🤖 Auris — Starting Services
+==================================================
+
+🌐 Starting Cloudflare tunnel...
+⏳ Waiting for Cloudflare tunnel URL...
+
+🎉 Tunnel URL: https://xxxx.trycloudflare.com
+✅ .env updated: CLOUDFLARE_URL=https://xxxx.trycloudflare.com
+📞 Updating Twilio webhook...
+✅ Found phone SID: PNxxxxxxxxxxxxxxxxx
+✅ Voice webhook updated:   https://xxxx.trycloudflare.com/call
+✅ Fallback webhook updated: https://xxxx.trycloudflare.com/call
+
+✅ All ready!
+   URL    : https://xxxx.trycloudflare.com
+   Browser: https://xxxx.trycloudflare.com/
+   Webhook: https://xxxx.trycloudflare.com/call
+
+⚡ Starting FastAPI...
+```
+
+> ⚠️ Make sure `cloudflared` is installed and `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_PHONE_NUMBER` are set in `backend/.env` before running.
+
+---
+
+## 🤖 ElevenLabs Agent Setup
+
+> ⚠️ **Run these scripts once** every time you add a new ElevenLabs API key. They are not part of the normal server startup.
+
+The ElevenLabs AI agent requires a two-step initialization before it can be customized. Both scripts are located in `scripts/agent_startup/`.
+
+---
+
+### Step 1 — `init_agent_overrides.py`
+
+Unlocks the agent's customization layer on ElevenLabs. Without this, the platform ignores any prompt, voice, or language you try to set.
+
+```bash
+cd scripts/agent_startup
+python init_agent_overrides.py
+# ✅ Overrides enabled!
+```
+
+**What it does:** Enables `conversation_config_override` on the agent, granting permission to override the first message, language, system prompt, and TTS voice ID per request.
+
+---
+
+### Step 2 — `provision_agent.py`
+
+Injects the full agent configuration — system prompt, language, voice, and opening message — into the ElevenLabs agent.
+
+```bash
+python provision_agent.py
+# Status: 200
+```
+
+**What it configures:**
+
+| Setting | Value |
+|---|---|
+| **Language** | Arabic (`ar`) |
+| **TTS Model** | `eleven_flash_v2_5` |
+| **Voice** | Egyptian Arabic voice (`EGYKu1CV0vikeTYK5zoc`) |
+| **System Prompt** | Full Egyptian Arabic order-taking persona |
+| **First Message** | Custom branded greeting with AI disclosure |
+
+---
+
+### Full Initialization Order
+
+```
+1. Add ELEVEN_API_KEY and ELEVENLABS_AGENT_ID to backend/.env
+2. python scripts/agent_startup/init_agent_overrides.py
+3. python scripts/agent_startup/provision_agent.py
+4. python backend/run.py   ← normal startup from here on
+```
 
 ---
 

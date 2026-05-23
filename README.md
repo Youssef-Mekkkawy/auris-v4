@@ -285,14 +285,14 @@ php artisan serve
 
 **Proprietary & Confidential**
 
-Copyright © 2026 **AISSP**. All Rights Reserved.
+Copyright © 2026. All Rights Reserved.
 
-This repository and its contents are the proprietary property of AISSP. Unauthorized copying, modification, distribution, or use of this software — via any medium — is strictly prohibited without the express written permission of the author. This software is **not open-source**.
+This repository and its contents are proprietary. Unauthorized copying, modification, distribution, or use of this software — via any medium — is strictly prohibited without the express written permission of the author. This software is **not open-source**.
 
 ---
 
 <div align="center">
 
-Built with ❤️ for Egypt & the MENA region by **AISSP**
+Built with ❤️ for Egypt & the MENA region
 
 </div>
